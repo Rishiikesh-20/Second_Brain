@@ -5,10 +5,11 @@ const { sign } = jwt;
 import express from "express"
 import {JWT_SECRET} from "../config.js"
 export const apiRouter=Router();
-import { Content, Tags, User } from "../db.js";
+import { Content, Link, Tags, User } from "../db.js";
 import {ObjectId} from "mongodb"
 import * as bcrypt from "bcrypt";
 import {authMiddleware} from "./../middleware.js"
+import crypto from "crypto";
 const saltRounds:number=10;
 export enum ResponseError{
   OK=200,
@@ -145,6 +146,68 @@ apiRouter.delete('/content',authMiddleware,async (req:Request,res:Response)=>{
     res.status(ResponseError.OK).json({message:"Successful"});
   }catch(e){
     console.log(e);
+    res.status(ResponseError.ServerError).json({message:e});
+  }
+  
+})
+
+apiRouter.post("/brain/share",authMiddleware,async (req:Request,res:Response)=>{
+  try{
+    if(req.body.share==="true"){
+      const isExist=await Link.findOne({userId:req.userId});
+      if(isExist){
+        res.status(ResponseError.OK).json({link:process.env.BASE_URL+"api/v1/brain/"+isExist.hash})
+      }
+      else{
+        const hash=crypto.randomBytes(16).toString('hex');
+        const link=await Link.create({hash,userId:req.userId});
+        const url=process.env.BASE_URL+"api/v1/brain/"+hash;
+        res.status(ResponseError.OK).json({link:url})
+      }
+    }else{
+      res.status(ResponseError.Conflict).json({message:"Status was not true"});
+    }
+  }catch(e){
+    res.status(ResponseError.ServerError).json({message:"Error "+e})
+  }
+})
+
+apiRouter.get("/brain/:sharelink",async (req:Request,res:Response)=>{
+  try{
+    const hash=req.params.sharelink;
+    const link=await Link.findOne({hash});
+    if(!link){
+      res.status(404).json({message:"Link not found"});
+    }else{
+      let userContent=await Content.find({userId:link.userId},{userId:false,__v:false,});
+      // for(let i=0;i<userContent.length;i++){
+      //   if(userContent[i].tags.length>0){
+      //     let tags:string|undefined|null[]=[]
+      //     for(let j=0;j<userContent[i].tags.length;j++){
+      //       tags[j]=await Tags.findOne({_id:userContent[i].tags[j]}{_id:false,title:true});
+      //     }
+      //     delete userContent[i].tags;
+      //   }
+      // }
+      const promiseArray = userContent.map(async (e) => {
+        return Promise.all(
+          e.tags.map(async (element) => {const obj = await Tags.findById(element, "-_id -_v");
+            return obj?.title
+          })
+        );
+      });
+      console.log(promiseArray)
+      const array = await Promise.all(promiseArray);
+      console.log(array);
+      const ex = userContent.map((item, index) => ({
+        ...item.toObject(),
+        tags: array[index],
+      }));
+      const user=await User.findById({_id:link.userId})
+      //@ts-ignore
+      res.status(ResponseError.OK).json({username:user.username,contents:ex})
+    }
+  }catch(e){
     res.status(ResponseError.ServerError).json({message:e});
   }
   
