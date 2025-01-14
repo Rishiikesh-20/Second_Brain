@@ -26,7 +26,7 @@ colorMap.set("purple-500", "text-purple-500");
 
 export function Button(props:ButtonProps){
   return (
-    <button className={`flex items-center justify-center ${variantMap.get(props.variant)} ${sizeMap.get(props.size)} ${colorMap.get(props.color)}`}>{props.startIcon? <div className="mr-[10px] "> {props.startIcon}</div>:null} <div>{props.text} </div>{props.endIcon ? <div className="ml-[10px]">{props.endIcon}</div>:null}
+    <button onClick={props.onClick} className={`flex items-center justify-center ${variantMap.get(props.variant)} ${sizeMap.get(props.size)} ${colorMap.get(props.color)}`}>{props.startIcon? <div className="mr-[10px] "> {props.startIcon}</div>:null} <div>{props.text} </div>{props.endIcon ? <div className="ml-[10px]">{props.endIcon}</div>:null}
     </button>
   )
 }
