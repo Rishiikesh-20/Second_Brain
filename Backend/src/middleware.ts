@@ -30,7 +30,7 @@ export async function authMiddleware(req:Request,res:Response,next:NextFunction)
         const decoded=verify(token,JWT_SECRET);
         console.log(decoded);
         if(!ObjectId.isValid((decoded as JwtPayload).userId)){
-          res.json({message:"not valid userid",decoded});
+          res.status(ResponseError.BadRequest).json({message:"not valid userid",decoded});
         }else{
           console.log("Came inside objectId")
           req.userId=new ObjectId((decoded as JwtPayload).userId); 
@@ -39,7 +39,7 @@ export async function authMiddleware(req:Request,res:Response,next:NextFunction)
 
       }catch(e){
         console.log({Error:e});
-        res.status(ResponseError.Conflict).json("Authorization error")
+        res.status(ResponseError.Conflict).json({message:"Authorization error"})
       }  
     }
     console.log("Came end of middleware")

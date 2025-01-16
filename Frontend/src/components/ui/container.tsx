@@ -5,15 +5,19 @@ import { TagsIcon } from "./tagsIcon"
 import { Youtube } from "./youtube"
 import { Tweet } from "./tweet"
 import { Document } from "./document"
+import axios from "axios"
+import { DB_URL } from "../DbUrl"
 type contentType="document" | "youtube" | "tweet" | "link"
 interface containerType{
   title:string,
   tags?:string[],
-  typeIcon:ReactElement,
+  typeIcon:ReactElement | null|undefined,
   date:string,
   contentType:contentType,
   content?:string,
   link?:string,
+  id:string,
+  Load:(id:any)=>void
 }
 
 const contentMap=new Map<contentType,ReactElement>();
@@ -38,7 +42,25 @@ export function Container(props:containerType){
 
         <div className="flex space-x-4">
           <ShareIcon size="sm"/>
-          <DeleteIcon size="sm" />
+          <div onClick={async ()=>{
+            const token=localStorage.getItem("token")
+            try{
+              const response=await axios.delete(`${DB_URL}api/v1/content`,{headers:{Authorization:"Bearer "+token},data:{contentId:props.id}})
+
+              alert("Successful")
+              props.Load(props.id);
+
+            }catch(e:any){
+              if(e.response.status===403){
+                alert("Trying to delete a doc you don't own")
+              }else{
+                alert("Server error")
+              }
+            }
+          }}>
+            <DeleteIcon size="sm" />
+          </div>
+          
         </div> 
 
       </div>
@@ -60,7 +82,3 @@ export function Container(props:containerType){
     </div>
   )
 }
-//Content database addition
-//1.date
-//2.link should be optional
-//3.content should be added as optional

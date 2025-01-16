@@ -17,7 +17,6 @@ export enum ResponseError{
   ServerError=500,
   Conflict=403
 }
-
 const signSchema=zod.object({
   username:zod.string().min(3,"Username length should be more than 2"),
   password:zod.string().min(1,"Password is not given")
@@ -69,12 +68,19 @@ apiRouter.post('/signin',async (req:Request,res:Response)=>{
     }
   } 
 })
+const D=new Date();
+let date=D.getDate();
+let month=D.getMonth()+1;
+let year=D.getFullYear();
+let totalDate=date+"/"+month+"/"+year;
 
 interface ContentType{
   type:String,
-  link:String,
+  link?:String,
   title:String,
+  content?:String,
   tags?:ObjectId[],
+  date:string,
   userId:ObjectId
 }
 
@@ -82,40 +88,45 @@ apiRouter.post('/content',authMiddleware,async (req:Request,res:Response)=>{
   console.log("Came inside content")
   console.log(req.body)
   try{
-    const objectIdSchema = zod
-    .string()
-    .refine((value) => ObjectId.isValid(value), {
-      message: "Invalid ObjectId",
-    });
+    console.log(req.body)
     const contentSchema=zod.object({
       type:zod.enum(["document" , "tweet" , "youtube" ,"link"]),
-      link:zod.string(),
+      link:zod.string().optional(),
       title:zod.string(),
-      tags:zod.array(zod.string())
+      tags:zod.array(zod.string()).optional(),
+      content:zod.string().optional()
     })
   
     const {success,error}=contentSchema.safeParse(req.body);
   
     if(!success){
+      console.log("Came inside !success")
       res.status(ResponseError.BadRequest).json({message:"Inputs are wrong "+error});
     }else{
       if(!req.userId){
         res.json({message:"Userid is not there in request"});
       }else{
-        
-        const {type,link,title,tags}=req.body;
+        let content1:ContentType={type:req.body.type,date:totalDate,title:req.body.title,userId:req.userId}
         let tagsObject:ObjectId[]=[];
-        for(let i=0;i<tags.length;i++){
-          const isExist=await Tags.findOne({title:tags[i]});
-          if(!isExist){
-            let {_id}=await Tags.create({title:tags[i]});
-            tagsObject.push(_id);
-          }else{
-            tagsObject.push(isExist._id);
+        if(req.body.tags){
+          for(let i=0;i<req.body.tags.length;i++){
+            const isExist=await Tags.findOne({title:req.body.tags[i]});
+            if(!isExist){
+              let {_id}=await Tags.create({title:req.body.tags[i]});
+              tagsObject.push(_id);
+            }else{
+              tagsObject.push(isExist._id);
+            }
           }
+          content1={...content1,tags:tagsObject}
         }
-        let content:ContentType={type,link,title,tags:tagsObject,userId:req.userId}
-        await Content.create(content);
+        if(req.body.content){
+          content1={...content1,content:req.body.content}
+        }
+        if(req.body.link){
+          content1={...content1,link:req.body.link}
+        }
+        await Content.create(content1);
         res.status(ResponseError.OK).json({message:"Successfully content added"});
       }
     }
@@ -127,9 +138,18 @@ apiRouter.post('/content',authMiddleware,async (req:Request,res:Response)=>{
 
 apiRouter.get('/content',authMiddleware,async (req:Request,res:Response)=>{
   try{
-    const documents=await Content.find({userId:req.userId});
-    console.log(documents);
-    res.status(ResponseError.OK).json({content:documents})
+      const documents = await Content.find({ userId: req.userId });
+      const promiseArray = documents.map(async (doc) => {
+          const tags = await Promise.all(
+              doc.tags.map(async (tagId) => {
+                  const tag = await Tags.findById(tagId, "title");
+                  return tag ? tag.title : null;
+              })
+          );
+          return { ...doc.toObject(), tags: tags.filter(Boolean) };
+      });
+      const resolvedDocuments = await Promise.all(promiseArray);
+      res.status(200).json({ content: resolvedDocuments });
   }catch(e){
     console.log(e);
     res.status(ResponseError.ServerError).json({message:e});
@@ -152,22 +172,24 @@ apiRouter.delete('/content',authMiddleware,async (req:Request,res:Response)=>{
 })
 
 apiRouter.post("/brain/share",authMiddleware,async (req:Request,res:Response)=>{
+  console.log(req.body);
   try{
     if(req.body.share==="true"){
       const isExist=await Link.findOne({userId:req.userId});
       if(isExist){
-        res.status(ResponseError.OK).json({link:process.env.BASE_URL+"api/v1/brain/"+isExist.hash})
+        res.status(ResponseError.OK).json({link:isExist.hash})
       }
       else{
         const hash=crypto.randomBytes(16).toString('hex');
         const link=await Link.create({hash,userId:req.userId});
-        const url=process.env.BASE_URL+"api/v1/brain/"+hash;
+        const url=hash;
         res.status(ResponseError.OK).json({link:url})
       }
     }else{
       res.status(ResponseError.Conflict).json({message:"Status was not true"});
     }
   }catch(e){
+    console.log(e)
     res.status(ResponseError.ServerError).json({message:"Error "+e})
   }
 })
@@ -180,15 +202,6 @@ apiRouter.get("/brain/:sharelink",async (req:Request,res:Response)=>{
       res.status(404).json({message:"Link not found"});
     }else{
       let userContent=await Content.find({userId:link.userId},{userId:false,__v:false,});
-      // for(let i=0;i<userContent.length;i++){
-      //   if(userContent[i].tags.length>0){
-      //     let tags:string|undefined|null[]=[]
-      //     for(let j=0;j<userContent[i].tags.length;j++){
-      //       tags[j]=await Tags.findOne({_id:userContent[i].tags[j]}{_id:false,title:true});
-      //     }
-      //     delete userContent[i].tags;
-      //   }
-      // }
       const promiseArray = userContent.map(async (e) => {
         return Promise.all(
           e.tags.map(async (element) => {const obj = await Tags.findById(element, "-_id -_v");
@@ -209,6 +222,5 @@ apiRouter.get("/brain/:sharelink",async (req:Request,res:Response)=>{
     }
   }catch(e){
     res.status(ResponseError.ServerError).json({message:e});
-  }
-  
+  } 
 })

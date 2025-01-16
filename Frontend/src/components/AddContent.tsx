@@ -1,8 +1,10 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Search } from "./ui/Search";
 import { Button } from "./ui/Button";
 import { TagsIcon } from "./ui/tagsIcon";
 import { CrossIcon } from "./ui/CrossIcon";
+import { DB_URL } from "./DbUrl";
+import axios from "axios";
 interface addContentType{
   onClose:()=>void
 }
@@ -26,6 +28,49 @@ export function AddContent(props:addContentType){
   function deleteTag(id:number){
     setTag(tags.filter(t=>t.id!==id))
   }
+  async function addToBrain(){
+    let variant=isChange.toLowerCase();
+    let obj={};
+    if(variant==="document"){
+      obj={
+        type:variant,
+        title:title.trim(),
+        content:content.trim()
+      }
+      if(link){
+        obj={
+          ...obj,
+          link
+        }
+      }
+    }else if(variant==="youtube" || variant==="tweet"){
+      obj={
+        type:variant,
+        title:title.trim(),
+        link:link.trim(),
+      }
+    }if(tags){
+      obj={
+        ...obj,
+        tags:tags.map(t=>t.tag)
+      }
+    }
+    console.log(obj)
+    const token=localStorage.getItem("token")
+    try{
+      const response=await axios.post(DB_URL+"api/v1/content",obj,{headers:{'Authorization':"Bearer "+token,'Content-Type': 'application/json'}});
+      alert("Successful")
+      props.onClose();
+
+    }catch(e:any){
+      if(e.response.status===411){
+        alert("Inputs are wrong");
+      }else if(e.response.status===500){
+        alert("Server Error")
+      }
+    }
+
+  }
   return(
     <div className="fixed top-0 left-0 w-full h-full bg-black bg-opacity-50 flex items-center justify-center backdrop-blur-sm">
       <div className="relative">
@@ -33,7 +78,6 @@ export function AddContent(props:addContentType){
             <CrossIcon size="lg"/>
           </div>
         <div className="bg-white p-[50px] rounded-xl shadow-xl flex flex-col space-y-6 ">
-          
             <div className="text-center font-bold">
               Add Content
             </div>
@@ -57,7 +101,7 @@ export function AddContent(props:addContentType){
               <div className="inline font-bold text-sky-900">
                 3.Content:  
               </div>
-              <textarea className="border border-gray-500 focus:outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500 w-full h-[100px]"></textarea>
+              <textarea className="border border-gray-500 focus:outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500 w-full h-[100px]" value={content} onChange={(e)=>setContent(e.target.value)} ></textarea>
             </div>:null}
             <div className="space-x-5 flex items-center ">
               <div className="inline font-bold text-sky-900 flex">
@@ -91,7 +135,7 @@ export function AddContent(props:addContentType){
             </div>
 
             <div className="">
-              <Button text="Add to the brain" size="lg" variant="primary" color="white" onClick={()=>{}} />
+              <Button text="Add to the brain" size="lg" variant="primary" color="white" onClick={addToBrain} />
             </div>
             
         </div>
